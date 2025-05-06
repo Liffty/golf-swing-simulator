@@ -1,357 +1,296 @@
-// clubModel.js - Club physics model
+// ballFlight.js - Ball flight physics implementation
 import { CONSTANTS } from './constants.js';
+import { rungeKutta4 } from './integration.js';
+import { ClubModel, CLUB_PRESETS } from './clubModel.js';
 
-export class ClubModel {
-  constructor(clubConfig) {
-    // Club configuration
-    this.config = {
-      // Basic club properties
-      type: clubConfig.type || 'driver',       // driver, iron, wedge, etc.
-      loft: clubConfig.loft || 10.5,           // degrees
-      lie: clubConfig.lie || 56,               // degrees
-      
-      // Advanced club properties
-      headWeight: clubConfig.headWeight || 200, // grams
-      cg: clubConfig.cg || {                   // Center of gravity location
-        x: 0,                                  // mm from center (heel to toe)
-        y: 0,                                  // mm from center (sole to crown)
-        z: 0                                   // mm from center (face to back)
-      },
-      moi: clubConfig.moi || {                 // Moment of inertia
-        x: 4500,                               // g·cm² (around x-axis)
-        y: 2500,                               // g·cm² (around y-axis)
-        z: 5000                                // g·cm² (around z-axis)
-      },
-      
-      // Club design (affects energy transfer and spin generation)
-      design: clubConfig.design || 'blade',    // 'blade', 'cavity_back', 'hybrid', etc.
-      faceThickness: clubConfig.faceThickness || 2.8, // mm
-      smashFactor: clubConfig.smashFactor || 1.48, // Maximum energy transfer coefficient
-      spinFactorCoefficient: clubConfig.spinFactorCoefficient || 1.0, // Higher for more spin-generating clubs
-      
-      // Sweet spot size (affects gear effect)
-      sweetSpotSize: clubConfig.sweetSpotSize || 1.0 // Relative size, larger = more forgiving
+export class BallFlight {
+  constructor() {
+    // Initialize ball state
+    this.reset();
+    
+    // Initialize default ball properties
+    this.ballProperties = {
+      mass: CONSTANTS.BALL_MASS,
+      radius: CONSTANTS.BALL_RADIUS,
+      compressionRate: 100, // Compression rate (harder = less compression)
+      coreDesign: 'standard' // Affects spin generation and energy transfer
     };
   }
   
-  // Calculate impact conditions based on swing parameters
-  calculateImpact(swingParams) {
-    // Validate swing parameters
-    this._validateSwingParams(swingParams);
+  reset() {
+    // Initial position (origin)
+    this.position = { x: 0, y: 0, z: 0 };
     
-    // Calculate effective loft at impact
-    const effectiveLoft = this._calculateEffectiveLoft(swingParams);
+    // Initial velocity (will be set by launchBall)
+    this.velocity = { x: 0, y: 0, z: 0 };
     
-    // Calculate impact location relative to sweet spot (center of face)
-    const impactLocation = this._normalizeImpactLocation(swingParams.impactLocation);
+    // Initial spin (will be set by launchBall)
+    this.spin = { 
+      rate: 0,    // rpm
+      axis: 0     // degrees (0 = pure backspin, positive = slice spin, negative = hook spin)
+    };
     
-    // Calculate gear effect based on impact location and club properties
-    const gearEffect = this._calculateGearEffect(impactLocation);
+    // Trajectory points for visualization
+    this.trajectory = [];
     
-    // Calculate energy transfer (ball speed)
-    const ballSpeed = this._calculateBallSpeed(swingParams.clubSpeed, impactLocation);
+    // Flight metrics
+    this.metrics = {
+      apexHeight: 0,
+      apexDistance: 0,
+      flightTime: 0,
+      carryDistance: 0,
+      totalDistance: 0,
+      finalLateralDistance: 0
+    };
     
-    // Calculate launch angle
-    const launchAngle = this._calculateLaunchAngle(effectiveLoft, impactLocation, swingParams.attackAngle);
+    // State flags
+    this.isFlightComplete = false;
+    this.hasReachedApex = false;
     
-    // Calculate launch direction
-    const launchDirection = this._calculateLaunchDirection(swingParams.faceAngle, swingParams.clubPath);
+    return this;
+  }
+  
+  // Set ball properties
+  setBallProperties(properties) {
+    this.ballProperties = {
+      ...this.ballProperties,
+      ...properties
+    };
     
-    // Calculate spin rate and axis
-    const spin = this._calculateSpin(swingParams, effectiveLoft, impactLocation, gearEffect);
+    return this;
+  }
+  
+  // Launch ball directly with specific launch parameters
+  launchBall(launchParams) {
+    this.reset();
     
-    // Return complete impact results
+    // Convert launch speed from mph to m/s
+    const speedMS = launchParams.ballSpeed * CONSTANTS.MPH_TO_MS;
+    
+    // Convert launch angles from degrees to radians
+    const launchAngleRad = launchParams.launchAngle * CONSTANTS.DEGREES_TO_RADIANS;
+    const launchDirectionRad = launchParams.launchDirection * CONSTANTS.DEGREES_TO_RADIANS;
+    
+    // Calculate initial velocity components
+    this.velocity = {
+      x: speedMS * Math.cos(launchAngleRad) * Math.cos(launchDirectionRad),
+      y: speedMS * Math.sin(launchAngleRad),
+      z: speedMS * Math.cos(launchAngleRad) * Math.sin(launchDirectionRad)
+    };
+    
+    // Set initial spin if provided
+    if (launchParams.spinRate !== undefined) {
+      this.spin.rate = launchParams.spinRate;
+    }
+    
+    if (launchParams.spinAxis !== undefined) {
+      this.spin.axis = launchParams.spinAxis;
+    }
+    
+    // Store initial position and velocity in trajectory array
+    this.trajectory.push({
+      position: { ...this.position },
+      velocity: { ...this.velocity },
+      spin: { ...this.spin },
+      time: 0
+    });
+    
+    return this;
+  }
+  
+  // Launch ball using club model and swing parameters
+  launchWithClub(clubType, swingParams) {
+    this.reset();
+    
+    // Get club configuration (either a preset or custom config)
+    const clubConfig = typeof clubType === 'string' 
+      ? CLUB_PRESETS[clubType] 
+      : clubType;
+    
+    if (!clubConfig) {
+      throw new Error(`Unknown club type: ${clubType}`);
+    }
+    
+    // Create club model
+    const club = new ClubModel(clubConfig);
+    
+    // Calculate impact conditions
+    const impact = club.calculateImpact(swingParams);
+    
+    // Use impact results to launch the ball
+    return this.launchBall({
+      ballSpeed: impact.ballSpeed,
+      launchAngle: impact.launchAngle,
+      launchDirection: impact.launchDirection,
+      spinRate: impact.spinRate,
+      spinAxis: impact.spinAxis
+    });
+  }
+  
+  // Calculate forces acting on the ball
+  calculateForces(position, velocity, spin) {
+    // Calculate velocity magnitude
+    const speed = Math.sqrt(
+      velocity.x * velocity.x + 
+      velocity.y * velocity.y + 
+      velocity.z * velocity.z
+    );
+    
+    // Calculate drag force magnitude
+    const dragMagnitude = 0.5 * CONSTANTS.AIR_DENSITY * CONSTANTS.DRAG_COEFFICIENT * 
+                          CONSTANTS.BALL_AREA * speed * speed;
+    
+    // Basic forces (gravity and drag)
+    const forces = {
+      // Drag force components (opposite to velocity direction)
+      x: speed > 0 ? -dragMagnitude * velocity.x / speed : 0,
+      y: -CONSTANTS.GRAVITY * this.ballProperties.mass + // Gravity force
+         (speed > 0 ? -dragMagnitude * velocity.y / speed : 0), // Drag force
+      z: speed > 0 ? -dragMagnitude * velocity.z / speed : 0
+    };
+    
+    // Phase 2: Add Magnus force if ball has spin
+    if (spin && spin.rate > 0) {
+      // Calculate Magnus force (simplified in Phase 1)
+      // Will be implemented properly in Phase 2
+    }
+    
+    return forces;
+  }
+  
+  // Calculate derivatives for numerical integration
+  calculateDerivatives(state) {
+    const forces = this.calculateForces(state.position, state.velocity, state.spin);
+    
     return {
-      ballSpeed,
-      launchAngle,
-      launchDirection,
-      spinRate: spin.rate,
-      spinAxis: spin.axis,
-      efficiency: spin.efficiency,
-      compression: this._calculateBallCompression(ballSpeed),
-      smashFactor: ballSpeed / swingParams.clubSpeed
-    };
-  }
-  
-  // Validate swing parameters
-  _validateSwingParams(params) {
-    // Required parameters
-    const required = ['clubSpeed', 'attackAngle', 'clubPath', 'faceAngle', 'impactLocation'];
-    
-    for (const param of required) {
-      if (params[param] === undefined) {
-        throw new Error(`Missing required swing parameter: ${param}`);
+      // Position derivatives (= velocity)
+      position: {
+        x: state.velocity.x,
+        y: state.velocity.y,
+        z: state.velocity.z
+      },
+      // Velocity derivatives (= acceleration = force/mass)
+      velocity: {
+        x: forces.x / this.ballProperties.mass,
+        y: forces.y / this.ballProperties.mass,
+        z: forces.z / this.ballProperties.mass
+      },
+      // Spin derivatives (for now, assume constant spin)
+      spin: {
+        rate: 0, // rpm/s (constant spin in Phase 1)
+        axis: 0  // degrees/s (constant axis in Phase 1)
       }
-    }
-    
-    // Set defaults for optional parameters
-    params.faceToPath = params.faceToPath || (params.faceAngle - params.clubPath);
-    params.dynamicLoft = params.dynamicLoft || (this.config.loft + params.attackAngle);
-    
-    return params;
-  }
-  
-  // Calculate effective loft at impact (combines static loft, attack angle, and shaft lean)
-  _calculateEffectiveLoft(swingParams) {
-    // Base loft is the club's static loft
-    let effectiveLoft = this.config.loft;
-    
-    // Add attack angle contribution (positive attack angle adds loft)
-    effectiveLoft += swingParams.attackAngle;
-    
-    // Add shaft lean contribution (forward shaft lean decreases loft)
-    if (swingParams.shaftLean) {
-      effectiveLoft -= swingParams.shaftLean;
-    }
-    
-    // Dynamic loft override if provided
-    if (swingParams.dynamicLoft !== undefined) {
-      effectiveLoft = swingParams.dynamicLoft;
-    }
-    
-    // Different club designs may affect effective loft differently
-    if (this.config.design === 'cavity_back') {
-      // Cavity backs tend to create slightly higher launch
-      effectiveLoft *= 1.02;
-    }
-    
-    return effectiveLoft;
-  }
-  
-  // Normalize impact location to a standard coordinate system
-  _normalizeImpactLocation(impactLocation) {
-    // If no impact location provided, assume center of face
-    if (!impactLocation) {
-      return { x: 0, y: 0 };
-    }
-    
-    // Return normalized location (mm from center)
-    return {
-      x: impactLocation.x || 0, // Heel (-) to toe (+) in mm
-      y: impactLocation.y || 0  // Low (-) to high (+) in mm
     };
   }
   
-  // Calculate gear effect based on impact location
-  _calculateGearEffect(impactLocation) {
-    // Distance from center of face affects gear effect strength
-    const distanceFromCenter = Math.sqrt(
-      impactLocation.x * impactLocation.x + 
-      impactLocation.y * impactLocation.y
-    );
-    
-    // Different club designs have different gear effect properties
-    let gearEffectCoefficient;
-    
-    switch (this.config.design) {
-      case 'blade':
-        // Blades typically have more pronounced gear effect
-        gearEffectCoefficient = 1.2;
-        break;
-      case 'cavity_back':
-        // Cavity backs typically have reduced gear effect
-        gearEffectCoefficient = 0.8;
-        break;
-      case 'game_improvement':
-        // Game improvement irons have even less gear effect
-        gearEffectCoefficient = 0.6;
-        break;
-      default:
-        gearEffectCoefficient = 1.0;
+  // Update flight metrics as the ball flies
+  updateMetrics(currentTime) {
+    // Update apex height if ball is still ascending
+    if (this.velocity.y > 0 && !this.hasReachedApex) {
+      // Ball is still going up
+      this.metrics.apexHeight = Math.max(this.metrics.apexHeight, this.position.y);
+    } else if (this.velocity.y <= 0 && !this.hasReachedApex) {
+      // Ball has reached apex
+      this.hasReachedApex = true;
+      this.metrics.apexHeight = this.position.y;
+      this.metrics.apexDistance = Math.sqrt(this.position.x * this.position.x + this.position.z * this.position.z);
     }
     
-    // Sweet spot size affects gear effect (larger sweet spot = less gear effect)
-    gearEffectCoefficient /= this.config.sweetSpotSize;
+    // Check if ball has hit the ground (y <= 0)
+    if (this.position.y <= 0 && currentTime > 0) {
+      this.isFlightComplete = true;
+      this.metrics.flightTime = currentTime;
+      
+      // Calculate horizontal distance traveled (carry)
+      this.metrics.carryDistance = Math.sqrt(this.position.x * this.position.x + this.position.z * this.position.z);
+      
+      // In Phase 1, we'll use a simple model for roll: 20% of carry distance
+      this.metrics.totalDistance = this.metrics.carryDistance * 1.2;
+      
+      // Calculate lateral distance (z-component)
+      this.metrics.finalLateralDistance = this.position.z;
+    }
+  }
+  
+  // Simulate the ball flight
+  simulate() {
+    let currentTime = 0;
     
-    // Horizontal gear effect (impact toward toe = hook spin, impact toward heel = slice spin)
-    const horizontalGearEffect = -impactLocation.x * 0.15 * gearEffectCoefficient;
+    // Continue simulation until ball hits ground or max time is reached
+    while (!this.isFlightComplete && currentTime < CONSTANTS.MAX_FLIGHT_TIME) {
+      // Create current state object
+      const currentState = {
+        position: { ...this.position },
+        velocity: { ...this.velocity },
+        spin: { ...this.spin }
+      };
+      
+      // Perform one step of numerical integration using RK4
+      const newState = rungeKutta4(
+        currentState,
+        CONSTANTS.TIME_STEP,
+        (state) => this.calculateDerivatives(state)
+      );
+      
+      // Update position, velocity, and spin
+      this.position = newState.position;
+      this.velocity = newState.velocity;
+      this.spin = newState.spin;
+      
+      // Increment time
+      currentTime += CONSTANTS.TIME_STEP;
+      
+      // Add point to trajectory
+      this.trajectory.push({
+        position: { ...this.position },
+        velocity: { ...this.velocity },
+        spin: { ...this.spin },
+        time: currentTime
+      });
+      
+      // Update metrics
+      this.updateMetrics(currentTime);
+    }
     
-    // Vertical gear effect (impact high = more backspin, impact low = less backspin)
-    const verticalGearEffect = impactLocation.y * 0.1 * gearEffectCoefficient;
-    
+    // Convert metrics to appropriate units for display
+    return this.getResults();
+  }
+  
+  // Get results in the appropriate units
+  getResults() {
     return {
-      horizontal: horizontalGearEffect, // Degrees of spin axis change
-      vertical: verticalGearEffect      // Percentage of spin rate change
+      // Convert all distances from meters to yards for display
+      apexHeight: this.metrics.apexHeight * CONSTANTS.METERS_TO_YARDS,
+      apexDistance: this.metrics.apexDistance * CONSTANTS.METERS_TO_YARDS,
+      flightTime: this.metrics.flightTime,
+      carryDistance: this.metrics.carryDistance * CONSTANTS.METERS_TO_YARDS,
+      totalDistance: this.metrics.totalDistance * CONSTANTS.METERS_TO_YARDS,
+      finalLateralDistance: this.metrics.finalLateralDistance * CONSTANTS.METERS_TO_YARDS,
+      ballSpeed: Math.sqrt(
+        this.velocity.x * this.velocity.x +
+        this.velocity.y * this.velocity.y +
+        this.velocity.z * this.velocity.z
+      ) * CONSTANTS.MS_TO_MPH,
+      launchAngle: Math.atan2(this.velocity.y, 
+        Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z)
+      ) * CONSTANTS.RADIANS_TO_DEGREES,
+      launchDirection: Math.atan2(this.velocity.z, this.velocity.x) * CONSTANTS.RADIANS_TO_DEGREES,
+      spinRate: this.spin.rate,
+      spinAxis: this.spin.axis,
+      trajectory: this.trajectory.map(point => ({
+        position: {
+          x: point.position.x * CONSTANTS.METERS_TO_YARDS,
+          y: point.position.y * CONSTANTS.METERS_TO_YARDS,
+          z: point.position.z * CONSTANTS.METERS_TO_YARDS
+        },
+        velocity: {
+          x: point.velocity.x * CONSTANTS.MS_TO_MPH,
+          y: point.velocity.y * CONSTANTS.MS_TO_MPH,
+          z: point.velocity.z * CONSTANTS.MS_TO_MPH
+        },
+        spin: point.spin,
+        time: point.time
+      }))
     };
-  }
-  
-  // Calculate ball speed based on club speed and impact location
-  _calculateBallSpeed(clubSpeed, impactLocation) {
-    // Base calculation using smash factor
-    let ballSpeed = clubSpeed * this.config.smashFactor;
-    
-    // Adjust for off-center hits
-    const distanceFromCenter = Math.sqrt(
-      impactLocation.x * impactLocation.x + 
-      impactLocation.y * impactLocation.y
-    );
-    
-    // Energy transfer efficiency drops with distance from sweet spot
-    // Rate of drop depends on club design (MOI)
-    let efficiencyLoss;
-    
-    switch (this.config.design) {
-      case 'blade':
-        // Blades are less forgiving on off-center hits
-        efficiencyLoss = 0.08 * distanceFromCenter;
-        break;
-      case 'cavity_back':
-        // Cavity backs are more forgiving
-        efficiencyLoss = 0.05 * distanceFromCenter;
-        break;
-      case 'game_improvement':
-        // Game improvement irons are most forgiving
-        efficiencyLoss = 0.03 * distanceFromCenter;
-        break;
-      default:
-        efficiencyLoss = 0.06 * distanceFromCenter;
-    }
-    
-    // Larger MOI means less speed loss on off-center hits
-    efficiencyLoss /= Math.sqrt(this.config.moi.y / 3000);
-    
-    // Apply efficiency loss capped at a maximum value
-    const maxEfficiencyLoss = 0.3; // 30% maximum loss
-    const actualEfficiencyLoss = Math.min(efficiencyLoss, maxEfficiencyLoss);
-    
-    // Apply efficiency loss to ball speed
-    ballSpeed *= (1 - actualEfficiencyLoss);
-    
-    return ballSpeed;
-  }
-  
-  // Calculate launch angle based on effective loft and impact location
-  _calculateLaunchAngle(effectiveLoft, impactLocation, attackAngle) {
-    // Base launch angle from effective loft (typically about 75-85% of effective loft)
-    let launchAngle = effectiveLoft * 0.8;
-    
-    // Vertical impact location affects launch angle
-    // Higher impacts increase launch angle (vertical gear effect)
-    launchAngle += impactLocation.y * 0.2;
-    
-    // Club design can affect launch angle
-    if (this.config.design === 'blade') {
-      // Blades typically launch lower
-      launchAngle *= 0.95;
-    } else if (this.config.design === 'game_improvement') {
-      // Game improvement irons typically launch higher
-      launchAngle *= 1.05;
-    }
-    
-    // Return launch angle
-    return launchAngle;
-  }
-  
-  // Calculate launch direction based on face angle and club path
-  _calculateLaunchDirection(faceAngle, clubPath) {
-    // New ball flight laws: initial direction is ~85% face angle, ~15% club path
-    return faceAngle * 0.85 + clubPath * 0.15;
-  }
-  
-  // Calculate spin rate and axis
-  _calculateSpin(swingParams, effectiveLoft, impactLocation, gearEffect) {
-    // Base spin calculation
-    // Spin loft = effective loft - attack angle
-    const spinLoft = effectiveLoft - swingParams.attackAngle;
-    
-    // Base spin rate calculation (simplified model)
-    // Higher spin loft = more spin
-    let spinRate = 50 * spinLoft * swingParams.clubSpeed;
-    
-    // Adjust for club design
-    spinRate *= this.config.spinFactorCoefficient;
-    
-    // Adjust for vertical impact location (gear effect)
-    const verticalAdjustment = 1 + gearEffect.vertical;
-    spinRate *= verticalAdjustment;
-    
-    // Calculate spin axis from face-to-path difference
-    // 0 = pure backspin, positive = slice spin, negative = hook spin
-    let spinAxis = swingParams.faceToPath;
-    
-    // Adjust for horizontal gear effect
-    spinAxis += gearEffect.horizontal;
-    
-    // Calculate spin efficiency (how much of the spin is "useful" backspin vs. side spin)
-    const spinEfficiency = Math.cos(spinAxis * CONSTANTS.DEGREES_TO_RADIANS);
-    
-    return {
-      rate: spinRate,
-      axis: spinAxis,
-      efficiency: spinEfficiency
-    };
-  }
-  
-  // Calculate ball compression at impact
-  _calculateBallCompression(ballSpeed) {
-    // Simple linear model for ball compression
-    // Higher ball speeds create more compression
-    return 0.2 * ballSpeed;
   }
 }
-
-// Define preset club models
-export const CLUB_PRESETS = {
-  // Drivers
-  DRIVER_STANDARD: {
-    type: 'driver',
-    loft: 10.5,
-    design: 'modern',
-    headWeight: 200,
-    moi: { x: 5200, y: 3000, z: 5500 },
-    smashFactor: 1.48,
-    spinFactorCoefficient: 0.9
-  },
-  
-  // Irons - Blades
-  BLADE_7IRON: {
-    type: 'iron',
-    loft: 34,
-    design: 'blade',
-    headWeight: 268,
-    cg: { x: 0, y: -5, z: 0 },
-    moi: { x: 2800, y: 1500, z: 2500 },
-    smashFactor: 1.38,
-    spinFactorCoefficient: 1.1,
-    sweetSpotSize: 0.8
-  },
-  
-  // Irons - Cavity Back
-  CAVITY_BACK_7IRON: {
-    type: 'iron',
-    loft: 31, // Modern cavity backs often have stronger lofts
-    design: 'cavity_back',
-    headWeight: 272,
-    cg: { x: 0, y: -3, z: 4 }, // CG further back
-    moi: { x: 3200, y: 1800, z: 3000 }, // Higher MOI
-    smashFactor: 1.4,
-    spinFactorCoefficient: 0.95,
-    sweetSpotSize: 1.2
-  },
-  
-  // Game Improvement Irons
-  GAME_IMPROVEMENT_7IRON: {
-    type: 'iron',
-    loft: 28, // Even stronger lofts
-    design: 'game_improvement',
-    headWeight: 280,
-    cg: { x: 0, y: -2, z: 8 }, // CG much further back
-    moi: { x: 4000, y: 2200, z: 3800 }, // Much higher MOI
-    smashFactor: 1.42,
-    spinFactorCoefficient: 0.85,
-    sweetSpotSize: 1.6
-  },
-  
-  // Wedges
-  WEDGE_PITCHING: {
-    type: 'wedge',
-    loft: 46,
-    design: 'blade',
-    headWeight: 284,
-    cg: { x: 0, y: -4, z: 2 },
-    moi: { x: 2400, y: 1300, z: 2200 },
-    smashFactor: 1.3,
-    spinFactorCoefficient: 1.2,
-    sweetSpotSize: 0.9
-  }
-};
