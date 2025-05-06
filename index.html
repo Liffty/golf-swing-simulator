@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Golf Swing Simulator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    
+    h1, h2, h3 {
+      color: #333;
+    }
+    
+    h1 {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    
+    .container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    
+    .panel {
+      background-color: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      padding: 20px;
+    }
+    
+    .controls {
+      flex: 1;
+      min-width: 300px;
+    }
+    
+    .visualization {
+      flex: 2;
+      min-width: 500px;
+      height: 400px;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    .results {
+      flex: 1;
+      min-width: 300px;
+    }
+    
+    .form-group {
+      margin-bottom: 15px;
+    }
+    
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    
+    input[type="range"], select {
+      width: 100%;
+    }
+    
+    input[type="checkbox"] {
+      margin-right: 8px;
+    }
+    
+    .value-display {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #666;
+    }
+    
+    .value-display span:nth-child(2) {
+      font-weight: bold;
+      color: #333;
+    }
+    
+    button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      width: 100%;
+      margin-top: 10px;
+    }
+    
+    button:hover {
+      background-color: #45a049;
+    }
+    
+    .result-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #eee;
+    }
+    
+    .result-value {
+      font-weight: bold;
+    }
+    
+    #trajectory-canvas {
+      width: 100%;
+      height: 100%;
+    }
+    
+    .trajectory-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    
+    .view-selector {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      z-index: 10;
+    }
+    
+    .tab-container {
+      margin-bottom: 20px;
+    }
+    
+    .tab-buttons {
+      display: flex;
+      border-bottom: 1px solid #ddd;
+    }
+    
+    .tab-button {
+      padding: 10px 15px;
+      background-color: #f8f8f8;
+      border: none;
+      border-radius: 4px 4px 0 0;
+      margin-right: 5px;
+      cursor: pointer;
+      width: auto;
+      margin-top: 0;
+    }
+    
+    .tab-button.active {
+      background-color: #4CAF50;
+      color: white;
+    }
+    
+    .tab-content {
+      display: none;
+      padding-top: 15px;
+    }
+    
+    .tab-content.active {
+      display: block;
+    }
+    
+    .comparison-container {
+      margin-top: 20px;
+    }
+    
+    .comparison-row {
+      display: flex;
+      border-bottom: 1px solid #eee;
+      padding: 8px 0;
+    }
+    
+    .comparison-label {
+      flex: 1;
+      font-weight: bold;
+    }
+    
+    .comparison-value {
+      flex: 1;
+      text-align: center;
+    }
+    
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      margin: 10px 0;
+    }
+    
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 24px;
+      margin-right: 10px;
+    }
+    
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #ccc;
+      transition: .4s;
+      border-radius: 24px;
+    }
+    
+    .toggle-slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 4px;
+      bottom: 4px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+    }
+    
+    input:checked + .toggle-slider {
+      background-color: #4CAF50;
+    }
+    
+    input:checked + .toggle-slider:before {
+      transform: translateX(26px);
+    }
+  </style>
+</head>
+<body>
+  <h1>Golf Swing Simulator</h1>
+  
+  <div class="container">
+    <div class="panel controls">
+      <div class="tab-container">
+        <div class="tab-buttons">
+          <button class="tab-button active" data-tab="club-tab">Club Settings</button>
+          <button class="tab-button" data-tab="swing-tab">Swing Settings</button>
+          <button class="tab-button" data-tab="impact-tab">Impact Settings</button>
+        </div>
+        
+        <!-- Club Settings Tab -->
+        <div id="club-tab" class="tab-content active">
+          <h2>Club Settings</h2>
+          
+          <div class="form-group">
+            <label for="club-type">Club Type</label>
+            <select id="club-type">
+              <option value="DRIVER_STANDARD">Driver (Standard)</option>
+              <option value="BLADE_7IRON" selected>7 Iron (Blade)</option>
+              <option value="CAVITY_BACK_7IRON">7 Iron (Cavity Back)</option>
+              <option value="GAME_IMPROVEMENT_7IRON">7 Iron (Game Improvement)</option>
+              <option value="WEDGE_PITCHING">Pitching Wedge</option>
+            </select>
+          </div>
+          
+          <div class="toggle-container">
+            <label class="toggle-switch">
+              <input type="checkbox" id="enable-custom-club">
+              <span class="toggle-slider"></span>
+            </label>
+            <span>Enable Custom Club Settings</span>
+          </div>
+          
+          <div id="custom-club-settings" style="display: none;">
+            <div class="form-group">
+              <label for="club-loft">Club Loft</label>
+              <input type="range" id="club-loft" min="8" max="60" value="34" step="0.5">
+              <div class="value-display">
+                <span>8°</span>
+                <span id="club-loft-value">34.0°</span>
+                <span>60°</span>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label for="club-design">Club Design</label>
+              <select id="club-design">
+                <option value="blade">Blade</option>
+                <option value="cavity_back">Cavity Back</option>
+                <option value="game_improvement">Game Improvement</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label for="sweet-spot-size">Sweet Spot Size</label>
+              <input type="range" id="sweet-spot-size" min="0.6" max="2.0" value="1.0" step="0.1">
+              <div class="value-display">
+                <span>Small (0.6)</span>
+                <span id="sweet-spot-size-value">1.0</span>
+                <span>Large (2.0)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Swing Settings Tab -->
+        <div id="swing-tab" class="tab-content">
+          <h2>Swing Settings</h2>
+          
+          <div class="form-group">
+            <label for="club-speed">Club Speed</label>
+            <input type="range" id="club-speed" min="50" max="140" value="85" step="1">
+            <div class="value-display">
+              <span>50 mph</span>
+              <span id="club-speed-value">85 mph</span>
+              <span>140 mph</span>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="attack-angle">Attack Angle</label>
+            <input type="range" id="attack-angle" min="-8" max="8" value="-4" step="0.5">
+            <div class="value-display">
+              <span>-8° (steep)</span>
+              <span id="attack-angle-value">-4.0°</span>
+              <span>8° (shallow)</span>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="club-path">Club Path</label>
+            <input type="range" id="club-path" min="-10" max="10" value="0" step="0.5">
+            <div class="value-display">
+              <span>-10° (out-to-in)</span>
+              <span id="club-path-value">0.0°</span>
+              <span>10° (in-to-out)</span>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label for="face-angle">Face Angle</label>
+            <input type="range" id="face-angle" min="-10" max="10" value="0" step="0.5">
+            <div class="value-display">
+              <span>-10° (closed)</span>
+              <span id="face-angle-value">0.0°</span>
+              <span>10° (open)</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Impact Settings Tab -->
+        <div id="impact-tab" class="tab-content">
+          <h2>Impact Settings</h2>
+          
+          <div class="form-group">
+            <label>Impact Location</label>
+            <div style="width: 200px; height: 200px; margin: 0 auto; position: relative; border: 1px solid #ccc; border-radius: 4px; background-color: #f8f8f8;">
+              <!-- Club face representation -->
+              <div style="width: 80%; height: 80%; position: absolute; top: 10%; left: 10%; background-color: #ddd; border-radius: 4px;">
+                <!-- Sweet spot -->
+                <div style="width: 10px; height: 10px; border-radius: 50%; background-color: #4CAF50; position: absolute; top: calc(50% - 5px); left: calc(50% - 5px);"></div>
+                
+                <!-- Impact point (draggable) -->
+                <div id="impact-point" style="width: 16px; height: 16px; border-radius: 50%; background-color: #FF5722; position: absolute; top: calc(50% - 8px); left: calc(50% - 8px); cursor: move; user-select: none;">
+                </div>
+              </div>
+              
+              <!-- Labels -->
+              <div style="position: absolute; top: 3px; width: 100%; text-align: center; font-size: 11px;">Crown</div>
+              <div style="position: absolute; bottom: 3px; width: 100%; text-align: center; font-size: 11px;">Sole</div>
+              <div style="position: absolute; left: 3px; top: 50%; transform: translateY(-50%); font-size: 11px;">Heel</div>
+              <div style="position: absolute; right: 3px; top: 50%; transform: translateY(-50%); font-size: 11px;">Toe</div>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; margin-top: 10px;">
+              <span>Impact X: <span id="impact-x-value">0.0 mm</span></span>
+              <span>Impact Y: <span id="impact-y-value">0.0 mm</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <button id="simulate-button">Simulate Shot</button>
+      <button id="compare-button" style="margin-top: 10px; background-color: #2196F3;">Compare Club Types</button>
+    </div>
+    
+    <div class="panel visualization">
+      <div class="view-selector">
+        <select id="view-type">
+          <option value="top">Top View</option>
+          <option value="side" selected>Side View</option>
+          <option value="front">Front View</option>
+        </select>
+      </div>
+      <div class="trajectory-container">
+        <canvas id="trajectory-canvas"></canvas>
+      </div>
+    </div>
+    
+    <div class="panel results">
+      <h2>Shot Results</h2>
+      
+      <div class="result-item">
+        <span>Ball Speed:</span>
+        <span id="ball-speed-result" class="result-value">--</span>
+      </div>
+      
+      <div class="result-item">
+        <span>Launch Angle:</span>
+        <span id="launch-angle-result" class="result-value">--</span>
+      </div>
+      
+      <div class="result-item">
+        <span>Launch Direction:</span>
+        <span id="launch-direction-result" class="result-value">--</span>
+      </div>
+      
+      <div class="result-item">
+        <span>Spin Rate:</span>
+        <span id="spin-rate-result" class="result-value">--</span>
+      </div>
+      
+      <div class="result-item">
+        <span>Spin Axis:</span>
+        <span id="spin-axis-result" class="result-value">--</span>
+      </div>
+      
+      <div class="result-item">
+        <span>Carry Distance:</span>
+        <span id="carry-distance-result" class="result-value">--</span>
+      </div>
+      
+      <div class="result-item">
+        <span>Total Distance:</span>
+        <span id="total-distance-result" class="result-value">--</span>
+      </div>
+      
+      <div class="result-item">
+        <span>Max Height:</span>
+        <span id="max-height-result" class="result-value">--</span>
+      </div>
+      
+      <div class="result-item">
+        <span>Lateral Distance:</span>
+        <span id="lateral-distance-result" class="result-value">--</span>
+      </div>
+      
+      <div class="result-item">
+        <span>Flight Time:</span>
+        <span id="flight-time-result" class="result-value">--</span>
+      </div>
+      
+      <div id="shot-shape-container" style="margin-top: 20px; display: none;">
+        <h3>Shot Shape</h3>
+        <div id="shot-shape-description"></div>
+      </div>
+      
+      <div id="comparison-results" class="comparison-container" style="display: none;">
+        <h3>Club Comparison</h3>
+        <div class="comparison-row">
+          <div class="comparison-label">Metric</div>
+          <div class="comparison-value">Blade</div>
+          <div class="comparison-value">Cavity Back</div>
+          <div class="comparison-value">Game Imp.</div>
+        </div>
+        <div class="comparison-row">
+          <div class="comparison-label">Ball Speed</div>
+          <div id="comp-ball-speed-blade" class="comparison-value">--</div>
+          <div id="comp-ball-speed-cavity" class="comparison-value">--</div>
+          <div id="comp-ball-speed-gi" class="comparison-value">--</div>
+        </div>
+        <div class="comparison-row">
+          <div class="comparison-label">Launch Angle</div>
+          <div id="comp-launch-blade" class="comparison-value">--</div>
+          <div id="comp-launch-cavity" class="comparison-value">--</div>
+          <div id="comp-launch-gi" class="comparison-value">--</div>
+        </div>
+        <div class="comparison-row">
+          <div class="comparison-label">Spin Rate</div>
+          <div id="comp-spin-blade" class="comparison-value">--</div>
+          <div id="comp-spin-cavity" class="comparison-value">--</div>
+          <div id="comp-spin-gi" class="comparison-value">--</div>
+        </div>
+        <div class="comparison-row">
+          <div class="comparison-label">Carry Distance</div>
+          <div id="comp-carry-blade" class="comparison-value">--</div>
+          <div id="comp-carry-cavity" class="comparison-value">--</div>
+          <div id="comp-carry-gi" class="comparison-value">--</div>
+        </div>
+        <div class="comparison-row">
+          <div class="comparison-label">Max Height</div>
+          <div id="comp-height-blade" class="comparison-value">--</div>
+          <div id="comp-height-cavity" class="comparison-value">--</div>
+          <div id="comp-height-gi" class="comparison-value">--</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script type="module">
+    import { CONSTANTS } from './src/physics/constants.js';
+    import { BallFlight } from './src/physics/ballFlight.js';
+    import { CLUB_PRESETS } from './src/physics/clubModel.js';
+    
+    // DOM Elements - Club Settings
+    const clubTypeSelect = document.getElementById('club-type');
+    const enableCustomClubCheckbox = document.getElementById('enable-custom-club');
+    const customClubSettingsDiv = document.getElementById('custom-club-settings');
+    const clubLoftInput = document.getElementById('club-loft');
+    const clubLoftValue = document.getElementById('club-loft-value');
+    const clubDesignSelect = document.getElementById('club-design');
+    const sweetSpotSizeInput = document.getElementById('sweet-spot-size');
+    const sweetSpotSizeValue = document.getElementById('sweet-spot-size-value');
+    
+    // DOM Elements - Swing Settings
+    const clubSpeedInput = document.getElementById('club-speed');
+    const clubSpeedValue = document.getElementById('club-speed-value');
+    const attackAngleInput = document.getElementById('attack-angle');
+    const attackAngleValue = document.getElementById('attack-angle-value');
+    const clubPathInput = document.getElementById('club-path');
+    const clubPathValue = document.getElementById('club-path-value');
+    const faceAngleInput = document.getElementById('face-angle');
+    const faceAngleValue = document.getElementById('face-angle-value');
+    
+    // DOM Elements - Impact Settings
+    const impactPoint = document.getElementById('impact-point');
+    const impactXValue = document.getElementById('impact-x-value');
+    const impactYValue = document.getElementById('impact-y-value');
+    
+    // DOM Elements - Buttons and Results
+    const simulateButton = document.getElementById('simulate-button');
+    const compareButton = document.getElementById('compare-button');
+    const viewTypeSelect = document.getElementById('view-type');
+    const canvas = document.getElementById('trajectory-canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // DOM Elements - Results
+    const ballSpeedResult = document.getElementById('ball-speed-result');
+    const launchAngleResult = document.getElementById('launch-angle-result');
+    const launchDirectionResult = document.getElementById('launch-direction-result');
+    const spinRateResult = document.getElementById('spin-rate-result');
+    const spinAxisResult = document.getElementById('spin-axis-result');
+    const carryDistanceResult = document.getElementById('carry-distance-result');
+    const totalDistanceResult = document.getElementById('total-distance-result');
+    const maxHeightResult = document.getElementById('max-height-result');
+    const lateralDistanceResult = document.getElementById('lateral-distance-result');
+    const flightTimeResult = document.getElementById('flight-time-result');
+    const shotShapeContainer = document.getElementById('shot-shape-container');
+    const shotShapeDescription = document.getElementById('shot-shape-description');
+    
+    // DOM Elements - Comparison Results
+    const comparisonResults = document.getElementById('comparison-results');
+    const compBallSpeedBlade = document.getElementById('comp-ball-speed-blade');
+    const compBallSpeedCavity = document.getElementById('comp-ball-speed-cavity');
+    const compBallSpeedGI = document.getElementById('comp-ball-speed-gi');
+    const compLaunchBlade = document.getElementById('comp-launch-blade');
+    const compLaunchCavity = document.getElementById('comp-launch-cavity');
+    const compLaunchGI = document.getElementById('comp-launch-gi');
+    const compSpinBlade = document.getElementById('comp-spin-blade');
+    const compSpinCavity = document.getElementById('comp-spin-cavity');
+    const compSpinGI = document.getElementById('comp-spin-gi');
+    const compCarryBlade = document.getElementById('comp-carry-blade');
+    const compCarryCavity = document.getElementById('comp-carry-cavity');
+    const compCarryGI = document.getElementById('comp-carry-gi');
+    const compHeightBlade = document.getElementById('comp-height-blade');
+    const compHeightCavity = document.getElementById('comp-height-cavity');
+    const compHeightGI = document.getElementById('comp-height-gi');
+    
+    // Variables for trajectory visualization
+    let currentTrajectories = [];
+    let trajectoryColors = ['#2196F3', '#FF5722', '#4CAF50'];
+    
+    // Variables for impact point dragging
+    let isDragging = false;
+    let impactX = 0; // mm from center (positive = toe)
+    let impactY = 0; // mm from center (positive = crown)
+    
+    // Resize canvas to fit container
+    function resizeCanvas() {
+      const container = canvas.parentElement;
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+      
+      // Redraw trajectory if exists
+      if (currentTrajectories.length > 0) {
+        drawTrajectories(currentTrajectories, viewTypeSelect.value);
+      }
+    }
+    
+    // Initialize canvas
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    
+    // Tab switching
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+    
+    tabButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        // Remove active class from all buttons and contents
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        tabContents.forEach(content => content.classList.remove('active'));
+        
+        // Add active class to clicked button and corresponding content
+        button.classList.add('active');
+        const tabId = button.getAttribute('data-tab');
+        document.getElementById(tabId).classList.add('active');
+      });
+    });
+    
+    // Update input value displays
+    clubLoftInput.addEventListener('input', () => {
+      clubLoftValue.textContent = `${parseFloat(clubLoftInput.value).toFixed(1)}°`;
+    });
+    
+    sweetSpotSizeInput.addEventListener('input', () => {
+      sweetSpotSizeValue.textContent = parseFloat(sweetSpotSizeInput.value).toFixed(1);
+    });
+    
+    clubSpeedInput.addEventListener('input', () => {
+      clubSpeedValue.textContent = `${clubSpeedInput.value} mph`;
+    });
+    
+    attackAngleInput.addEventListener('input', () => {
+      attackAngleValue.textContent = `${parseFloat(attackAngleInput.value).toFixed(1)}°`;
+    });
+    
+    clubPathInput.addEventListener('input', () => {
+      clubPathValue.textContent = `${parseFloat(clubPathInput.value).toFixed(1)}°`;
+    });
+    
+    faceAngleInput.addEventListener('input', () => {
+      faceAngleValue.textContent = `${parseFloat(faceAngleInput.value).toFixed(1)}°`;
+    });
+    
+    // Handle custom club settings toggle
+    enableCustomClubCheckbox.addEventListener('change', () => {
+      customClubSettingsDiv.style.display = enableCustomClubCheckbox.checked ? 'block' : 'none';
+    });
+    
+    // Handle club type selection
+    clubTypeSelect.addEventListener('change', () => {
+      const selectedClubType = clubTypeSelect.value;
+      const clubConfig = CLUB_PRESETS[selectedClubType];
+      
+      if (clubConfig) {
+        // Update club loft
+        clubLoftInput.value = clubConfig.loft;
+        clubLoftValue.textContent = `${clubConfig.loft.toFixed(1)}°`;
+        
+        // Update club design
+        clubDesignSelect.value = clubConfig.design;
+        
+        // Update sweet spot size
+        sweetSpotSizeInput.value = clubConfig.sweetSpotSize;
+        sweetSpotSizeValue.textContent = clubConfig.sweetSpotSize.toFixed(1);
+        
+        // Update attack angle based on club type
+        if (selectedClubType.includes('DRIVER')) {
+          attackAngleInput.value = 0;
+          attackAngleValue.textContent = '0.0°';
+        } else {
+          attackAngleInput.value = -4;
+          attackAngleValue.textContent = '-4.0°';
+        }
+      }
+    });
+    
+    // Handle impact point dragging
+    impactPoint.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      e.preventDefault();
+    });
+    
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      
+      const container = impactPoint.parentElement;
+      const rect = container.getBoundingClientRect();
+      
+      // Calculate relative position within container
+      const relX = e.clientX - rect.left;
+      const relY = e.clientY - rect.top;
+      
+      // Convert to percentage (0-100%)
+      const percentX = Math.max(0, Math.min(100, (relX / rect.width) * 100));
+      const percentY = Math.max(0, Math.min(100, (relY / rect.height) * 100));
+      
+      // Update impact point position
+      impactPoint.style.left = `${percentX}%`;
+      impactPoint.style.top = `${percentY}%`;
+      
+      // Convert to mm from center (-15 to 15mm range)
+      impactX = ((percentX / 100) * 30) - 15;
+      impactY = 15 - ((percentY / 100) * 30);
+      
+      // Update display values
+      impactXValue.textContent = `${impactX.toFixed(1)} mm`;
+      impactYValue.textContent = `${impactY.toFixed(1)} mm`;
+    });
+    
+    document.addEventListener('mouseup', () => {
+      isDragging = false;
+    });
+    
+    // Draw trajectories on canvas
+    function drawTrajectories(trajectories, viewType) {
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      if (!trajectories || trajectories.length === 0) return;
+      
+      // Calculate scale factors to fit trajectory in canvas
+      let xMax = -Infinity, yMax = -Infinity, zMax = -Infinity;
+      let xMin = Infinity, yMin = Infinity, zMin = Infinity;
+      
+      // Find bounds across all trajectories
+      trajectories.forEach(trajectory => {
+        trajectory.forEach(point => {
+          const { x, y, z } = point.position;
+          xMax = Math.max(xMax, x);
+          yMax = Math.max(yMax, y);
+          zMax = Math.max(zMax, z);
+          xMin = Math.min(xMin, x);
+          yMin = Math.min(yMin, y);
+          zMin = Math.min(zMin, z);
+        });
+      });
+      
+      // Add padding
+      const padding = 30;
+      let xRange, yRange;
+      
+      // Set drawing coordinates based on view type
+      let getDrawCoords;
+      
+      switch (viewType) {
+        case 'top': // Top-down view (x, z)
+          xRange = xMax - x
