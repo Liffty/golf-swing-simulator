@@ -1,0 +1,20 @@
+{
+  "name": "golf-swing-simulator",
+  "version": "1.0.0",
+  "description": "A physics-based golf swing simulator",
+  "main": "index.js",
+  "scripts": {
+    "start": "http-server -c-1",
+    "test": "jest"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1",
+    "jest": "^29.5.0"
+  },
+  "dependencies": {
+    "three": "^0.150.1"
+  }
+}
+
