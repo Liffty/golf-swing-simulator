@@ -3,7 +3,8 @@ export function rungeKutta4(state, timeStep, derivativeFn) {
   // Clone state to avoid modifying the original
   const originalState = {
     position: { ...state.position },
-    velocity: { ...state.velocity }
+    velocity: { ...state.velocity },
+    spin: { ...state.spin } 
   };
   
   // Step 1: Calculate k1 (derivatives at the beginning of the interval)
@@ -20,6 +21,10 @@ export function rungeKutta4(state, timeStep, derivativeFn) {
       x: originalState.velocity.x + k1.velocity.x * timeStep / 2,
       y: originalState.velocity.y + k1.velocity.y * timeStep / 2,
       z: originalState.velocity.z + k1.velocity.z * timeStep / 2
+    },
+    spin: {
+      rate: originalState.spin.rate + (k1.spin ? k1.spin.rate * timeStep / 2 : 0),
+      axis: originalState.spin.axis + (k1.spin ? k1.spin.axis * timeStep / 2 : 0)
     }
   };
   const k2 = derivativeFn(halfStepState1);
@@ -35,6 +40,10 @@ export function rungeKutta4(state, timeStep, derivativeFn) {
       x: originalState.velocity.x + k2.velocity.x * timeStep / 2,
       y: originalState.velocity.y + k2.velocity.y * timeStep / 2,
       z: originalState.velocity.z + k2.velocity.z * timeStep / 2
+    },
+    spin: {
+      rate: originalState.spin.rate + (k2.spin ? k2.spin.rate * timeStep / 2 : 0),
+      axis: originalState.spin.axis + (k2.spin ? k2.spin.axis * timeStep / 2 : 0)
     }
   };
   const k3 = derivativeFn(halfStepState2);
@@ -50,6 +59,10 @@ export function rungeKutta4(state, timeStep, derivativeFn) {
       x: originalState.velocity.x + k3.velocity.x * timeStep,
       y: originalState.velocity.y + k3.velocity.y * timeStep,
       z: originalState.velocity.z + k3.velocity.z * timeStep
+    },
+    spin: {
+      rate: originalState.spin.rate + (k3.spin ? k3.spin.rate * timeStep : 0),
+      axis: originalState.spin.axis + (k3.spin ? k3.spin.axis * timeStep : 0)
     }
   };
   const k4 = derivativeFn(fullStepState);
@@ -76,6 +89,20 @@ export function rungeKutta4(state, timeStep, derivativeFn) {
       ),
       z: originalState.velocity.z + (timeStep / 6) * (
         k1.velocity.z + 2 * k2.velocity.z + 2 * k3.velocity.z + k4.velocity.z
+      )
+    },
+    spin: {
+      rate: originalState.spin.rate + (timeStep / 6) * (
+        (k1.spin ? k1.spin.rate : 0) + 
+        2 * (k2.spin ? k2.spin.rate : 0) + 
+        2 * (k3.spin ? k3.spin.rate : 0) + 
+        (k4.spin ? k4.spin.rate : 0)
+      ),
+      axis: originalState.spin.axis + (timeStep / 6) * (
+        (k1.spin ? k1.spin.axis : 0) + 
+        2 * (k2.spin ? k2.spin.axis : 0) + 
+        2 * (k3.spin ? k3.spin.axis : 0) + 
+        (k4.spin ? k4.spin.axis : 0)
       )
     }
   };
