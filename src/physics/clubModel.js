@@ -255,8 +255,9 @@ export class ClubModel {
     const spinLoft = effectiveLoft - swingParams.attackAngle;
     
     // Base spin rate calculation (simplified model)
-    // Higher spin loft = more spin
-    let spinRate = 50 * spinLoft * swingParams.clubSpeed;
+    // Higher spin loft = more spin. Coefficient calibrated so a 7-iron
+    // (~34 spin loft, ~85 mph club speed) lands near a realistic ~7000 rpm.
+    let spinRate = 2.2 * spinLoft * swingParams.clubSpeed;
     
     // Adjust for club design
     spinRate *= this.config.spinFactorCoefficient;

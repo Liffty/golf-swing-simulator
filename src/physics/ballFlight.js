@@ -87,6 +87,14 @@ export class BallFlight {
       this.spin.axis = launchParams.spinAxis;
     }
     
+    // Store launch conditions (measured at impact, t=0) for reporting,
+    // so results show the launch state rather than the landing state.
+    this.launch = {
+      ballSpeed: launchParams.ballSpeed,                // mph
+      launchAngle: launchParams.launchAngle || 0,       // degrees
+      launchDirection: launchParams.launchDirection || 0 // degrees
+    };
+    
     // Store initial position and velocity in trajectory array
     this.trajectory.push({
       position: { ...this.position },
@@ -296,15 +304,9 @@ export class BallFlight {
       carryDistance: this.metrics.carryDistance * CONSTANTS.METERS_TO_YARDS,
       totalDistance: this.metrics.totalDistance * CONSTANTS.METERS_TO_YARDS,
       finalLateralDistance: this.metrics.finalLateralDistance * CONSTANTS.METERS_TO_YARDS,
-      ballSpeed: Math.sqrt(
-        this.velocity.x * this.velocity.x +
-        this.velocity.y * this.velocity.y +
-        this.velocity.z * this.velocity.z
-      ) * CONSTANTS.MS_TO_MPH,
-      launchAngle: Math.atan2(this.velocity.y, 
-        Math.sqrt(this.velocity.x * this.velocity.x + this.velocity.z * this.velocity.z)
-      ) * CONSTANTS.RADIANS_TO_DEGREES,
-      launchDirection: Math.atan2(this.velocity.z, this.velocity.x) * CONSTANTS.RADIANS_TO_DEGREES,
+      ballSpeed: this.launch.ballSpeed,
+      launchAngle: this.launch.launchAngle,
+      launchDirection: this.launch.launchDirection,
       spinRate: this.spin.rate,
       spinAxis: this.spin.axis,
       trajectory: this.trajectory.map(point => ({
