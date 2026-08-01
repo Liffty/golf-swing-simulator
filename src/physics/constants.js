@@ -9,6 +9,10 @@ export const CONSTANTS = {
   
   // Default drag coefficient (will be refined in later phases)
   DRAG_COEFFICIENT: 0.25,  // Simplified coefficient for Phase 1
+
+  // Magnus / lift model
+  LIFT_COEFFICIENT_MAX: 0.30, // Saturating maximum lift coefficient
+  LIFT_SPIN_SCALE: 3.0,       // How quickly lift rises with spin factor S = r*omega/v
   
   // Simulation settings
   TIME_STEP: 0.01,         // s (10ms for numerical integration)

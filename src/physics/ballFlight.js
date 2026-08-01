@@ -149,10 +149,40 @@ export class BallFlight {
       z: speed > 0 ? -dragMagnitude * velocity.z / speed : 0
     };
     
-    // Phase 2: Add Magnus force if ball has spin
-    if (spin && spin.rate > 0) {
-      // Calculate Magnus force (simplified in Phase 1)
-      // Will be implemented properly in Phase 2
+    // Magnus force from ball spin (produces lift and lateral curve)
+    if (spin && spin.rate > 0 && speed > 0) {
+      // Angular speed in rad/s (convert from rpm)
+      const omega = spin.rate * 2 * Math.PI / 60;
+
+      // Spin factor S = r*omega / v  (dimensionless)
+      const spinFactor = (this.ballProperties.radius * omega) / speed;
+
+      // Lift coefficient rises with spin and saturates (empirical golf model)
+      const liftCoeff = CONSTANTS.LIFT_COEFFICIENT_MAX *
+                        (1 - Math.exp(-CONSTANTS.LIFT_SPIN_SCALE * spinFactor));
+
+      // Unit spin-axis vector derived from spin.axis:
+      //   axis = 0  -> pure backspin (axis along +z, the lateral direction) -> lift
+      //   axis > 0  -> slice tilt  -> curves ball to the right (+z)
+      //   axis < 0  -> hook tilt   -> curves ball to the left  (-z)
+      const axisRad = spin.axis * CONSTANTS.DEGREES_TO_RADIANS;
+      const sx = 0;
+      const sy = -Math.sin(axisRad); // sidespin component (about the vertical axis)
+      const sz = Math.cos(axisRad);  // backspin component (about the lateral axis)
+
+      // Magnus force direction = unit(spinAxis x velocity)
+      const cx = sy * velocity.z - sz * velocity.y;
+      const cy = sz * velocity.x - sx * velocity.z;
+      const cz = sx * velocity.y - sy * velocity.x;
+      const cMag = Math.sqrt(cx * cx + cy * cy + cz * cz);
+
+      if (cMag > 0) {
+        const magnusMagnitude = 0.5 * CONSTANTS.AIR_DENSITY *
+                                CONSTANTS.BALL_AREA * liftCoeff * speed * speed;
+        forces.x += magnusMagnitude * cx / cMag;
+        forces.y += magnusMagnitude * cy / cMag;
+        forces.z += magnusMagnitude * cz / cMag;
+      }
     }
     
     return forces;

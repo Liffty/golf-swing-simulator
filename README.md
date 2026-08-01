@@ -1,7 +1,3 @@
-# golf-swing-simulator
-A physics-based golf simulator with club model differentiation
-
-# Denne readme er mest til at claude kan forstå konteskten.
 # Golf Swing Simulator
 
 A physics-based golf simulator that accurately models ball flight based on club type, club design, and swing mechanics.
@@ -38,15 +34,15 @@ golf-swing-simulator/
 The project follows a phased development approach:
 
 ### Phase 1 (Current)
-- Basic flight model with gravity and drag
+- Flight model with gravity, drag, and Magnus force (spin-induced lift and curve)
 - Core clubhead impact model
 - Simple club design differentiation
 - Basic trajectory visualization
 
 ### Phase 2 (Planned)
-- Advanced ball physics with Magnus effect
-- Detailed spin calculations
+- Refined spin decay over flight
 - Enhanced club design parameters
+- Validation against launch-monitor data
 
 ### Phase 3 (Future)
 - Environmental factors (wind, air density, humidity)
@@ -66,7 +62,7 @@ The simulator uses a system of differential equations to model ball flight:
 
 1. **Gravity**: Constant downward force
 2. **Drag**: Air resistance based on ball speed and aerodynamic properties
-3. **Magnus Force**: Lift and directional forces created by ball spin (Phase 2)
+3. **Magnus Force**: Lift and directional (curve) forces created by ball spin, using a saturating lift-coefficient model based on the spin factor S = r·ω/v
 
 These are solved using a 4th-order Runge-Kutta numerical integration method.
 
