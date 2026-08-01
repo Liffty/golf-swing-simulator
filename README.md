@@ -1,6 +1,10 @@
 # Golf Swing Simulator
 
-A physics-based golf simulator that accurately models ball flight based on club type, club design, and swing mechanics.
+A physics-based golf simulator that models ball flight based on club type, club design, and swing mechanics.
+
+![Golf Swing Simulator](screenshot.png)
+
+> **Status: work in progress.** The flight model is a simplified physics model still being calibrated. Launch conditions and carry distances are approximate and not yet validated against launch-monitor data.
 
 ## Project Overview
 
